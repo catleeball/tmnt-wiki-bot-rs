@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::fmt;
 use std::fs::read_to_string;
@@ -6,6 +7,66 @@ use std::hash::Hash;
 use std::path::Path;
 
 
+/// A vector of WordEntries comprising a sentence or phrase.
+pub struct Sentence {
+    words: Vec<WordEntry>,
+}
+impl Sentence {
+    /// Check each combinations of stresses for each word in the sentence and return True if
+    /// one is found matching trochaic tetrameter that is also exactly 8 syllables.
+    /// E.g. you can sing it to the TMNT themesong.
+    fn turtle_trochaic_tetrameter(&self) -> bool {
+
+        false
+    }
+
+    fn can_be_eight_syllables(&self) -> bool {
+        let mut can_be_eight = false;
+
+        for word in self.words.iter() {
+            for word_len in word.get_syllable_lengths() {
+
+            }
+        }
+
+        let mut word_queue = self.words.clone();
+        while !word_queue.is_empty() {
+            let word = word_queue.pop();
+
+
+        }
+
+        can_be_eight
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+/// A single Word with all its known Pronunciations.
+pub struct WordEntry {
+    word: Word,
+    pronunciations: Vec<Pronunciation>,
+}
+impl WordEntry {
+    // TODO: figure out how to make these functions into properties that are lazily evaluated only once
+    fn get_syllables(&self) -> &Vec<Vec<Syllable>> {
+        self.pronunciations.iter()
+            .map(|p| p.syllables)
+            .collect()
+    }
+    fn get_syllable_lengths(&self) -> &Vec<u8> {
+        self.pronunciations.iter()
+            .map(|p| p.len())
+            .collect()
+    }
+    fn get_unique_syllable_lengths(&self) -> &Vec<u8> {
+        self.pronunciations.iter()
+            .map(|p| p.len())
+            .collect()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+/// A single word with its string representations and one possible pronunciation.
 pub struct Word {
     word: String,
     pronunciation: Pronunciation,
@@ -23,8 +84,14 @@ impl Word {
         }
         Word { word, pronunciation: Pronunciation::from_str(pronunciation_str) }
     }
+    fn len(&self) -> u8 {
+        self.pronunciation.len() as u8
+    }
+
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+/// Syllables that represent how a word is pronounced.
 pub struct Pronunciation {
     syllables: Vec<Syllable>
     // Implementation note:
@@ -44,6 +111,9 @@ impl Pronunciation {
             .collect();
         Pronunciation { syllables }
     }
+    fn len(&self) -> u8 {
+        self.syllables.len() as u8
+    }
 }
 impl fmt::Display for Pronunciation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -59,6 +129,7 @@ impl fmt::Display for Pronunciation {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Syllable {
     PrimaryStress,
     SecondaryStress,
