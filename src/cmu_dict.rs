@@ -1,5 +1,4 @@
 use ahash::AHashMap;
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::fmt;
 use std::fs::read_to_string;
@@ -9,63 +8,82 @@ use std::path::Path;
 
 /// A vector of WordEntries comprising a sentence or phrase.
 pub struct Sentence {
-    words: Vec<WordEntry>,
+    sentence: String,
+    words: Vec<String>,
 }
 impl Sentence {
-    /// Check each combinations of stresses for each word in the sentence and return True if
-    /// one is found matching trochaic tetrameter that is also exactly 8 syllables.
-    /// E.g. you can sing it to the TMNT themesong.
-    fn turtle_trochaic_tetrameter(&self) -> bool {
-
-        false
+    fn new(sentence: &str, dict: &CmuDict) -> Sentence {
+        let mut words: String = String::from(sentence);
+        // Remove punctuation chars and convert chars to uppercase.
+        let words: String = words
+            .chars()
+            .filter(|c| c.is_alphanumeric())    // Remove punctuation for word matching
+            .map(|c| c.to_ascii_uppercase())
+            .collect();
+        let mut words: Vec<String> = words
+            .split_whitespace()
+            .map(|word| word.to_string())
+            .collect();
+        Sentence { sentence: sentence.to_string(), words}
     }
+    /// Check if a sentence can be pronounced in trochaic tetrameter and is exactly 8 syllables.
+    /// E.g. you can sing it to the TMNT themesong.
+    fn turtle_trochaic_tetrameter(&self) -> bool { false }
 
-    fn can_be_eight_syllables(&self) -> bool {
-        let mut can_be_eight = false;
-
-        for word in self.words.iter() {
-            for word_len in word.get_syllable_lengths() {
+    /// Return possible ways to pronounce a sentence in eight syllables.
+    ///
+    /// Each word in a sentence may contain multiple Pronunciations. Check each possible combination of
+    /// pronunciations, and return those which equal to N syllables.
+    ///
+    /// Variation of subset-sum problem. See §35.5 in "Intro to Algorithms" 4e.
+    fn n_syllable_pronunciations(&self, &dict: CmuDict, n: u8) -> Option<Vec<Vec<Word>>> {//-> Vec<Vec<&Pronunciation>> {
+        // Every word is at least one syllable. If we have more words than N, then we
+        // can't possibly pronounce this in N syllables.
+        if self.len() > n {
+            None
+        }
+        let valid_pronunciations: Vec<Vec<Syllable>> = Vec::default();
+        for word_str in self.words {
+            let pronunciations: Vec<Word> = dict.get(word_str);
+            for pronunciation in pronunciations {
 
             }
         }
+        None
+    }
 
-        let mut word_queue = self.words.clone();
-        while !word_queue.is_empty() {
-            let word = word_queue.pop();
+    fn all_words_in_dict(&self, dict: &CmuDict) -> bool {
+        self.words
+            .par_iter()
+            .all(|word| dict.contains_key(word))
+    }
 
-
-        }
-
-        can_be_eight
+    fn len(&self) -> u8 {
+        self.words.len() as u8
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-/// A single Word with all its known Pronunciations.
-pub struct WordEntry {
-    word: Word,
-    pronunciations: Vec<Pronunciation>,
-}
-impl WordEntry {
-    // TODO: figure out how to make these functions into properties that are lazily evaluated only once
-    fn get_syllables(&self) -> &Vec<Vec<Syllable>> {
-        self.pronunciations.iter()
-            .map(|p| p.syllables)
-            .collect()
-    }
-    fn get_syllable_lengths(&self) -> &Vec<u8> {
-        self.pronunciations.iter()
-            .map(|p| p.len())
-            .collect()
-    }
-    fn get_unique_syllable_lengths(&self) -> &Vec<u8> {
-        self.pronunciations.iter()
-            .map(|p| p.len())
-            .collect()
-    }
-}
+// #[derive(Copy, Clone, Debug, PartialEq)]
+// /// A single Word with all its known Pronunciations.
+// pub struct WordEntry {
+//     pronunciations: Vec<Word>,
+// }
+// impl WordEntry {
+//     // TODO: figure out how to make these functions into properties that are lazily evaluated only once
+//     fn get_syllable_lengths(&self) -> &Vec<u8> {
+//         self.pronunciations.iter()
+//             .map(|p| p.len())
+//             .collect()
+//     }
+//     fn get_unique_syllable_lengths(&self) -> &AHashSet<u8> {
+//         self.pronunciations.iter()
+//             .map(|p| p.len())
+//             .collect()
+//     }
+// }
+//
+// #[derive(Copy, Clone, Debug, PartialEq)]
 
-#[derive(Copy, Clone, Debug, PartialEq)]
 /// A single word with its string representations and one possible pronunciation.
 pub struct Word {
     word: String,
@@ -84,13 +102,10 @@ impl Word {
         }
         Word { word, pronunciation: Pronunciation::from_str(pronunciation_str) }
     }
-    fn len(&self) -> u8 {
-        self.pronunciation.len() as u8
-    }
-
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+
+#[derive(Debug, PartialEq)]
 /// Syllables that represent how a word is pronounced.
 pub struct Pronunciation {
     syllables: Vec<Syllable>
@@ -100,7 +115,7 @@ pub struct Pronunciation {
 impl Pronunciation {
     fn from_str(pronunciation_str: &str) -> Pronunciation {
         let syllables: Vec<Syllable> = pronunciation_str
-            .chars()
+            .par_chars()
             .filter(|c| c.is_ascii_digit())
             .map(|digit| match digit {
                 '0' => Syllable::Unstressed,
@@ -146,8 +161,24 @@ impl Syllable {
     }
 }
 
+fn process_cmu_entry(line: &str) -> (String, Pronunciation) {
+    let (word_str, pronunciation_str) = line
+        .split_once("  ")
+        .expect(format!("Failed to split line {line}").as_str());
+    // Word ends with a number e.g. Foo(2), represent the Nth pronunciation. Strip it off.
+    let mut word = word_str.to_string();
+    if word.ends_with(")") {
+        // There are only single-digit quantities of additional pronunciations in CMU dict, so
+        // we can simply truncate the last three characters.
+        word.truncate(word.len() - 3)
+    }
+    (word, Pronunciation::from_str(pronunciation_str))
+}
+
+type CmuDict = AHashMap<String, Vec<Word>>;
+
 /// Create a hashmap of words to pronunciations from the CMU pronouncing dictionary.
-pub fn cmu_dict_file_to_map(file: &Path) -> AHashMap<String, Vec<Pronunciation>>
+pub fn cmu_dict_file_to_map(file: &Path) -> CmuDict
 {
     // Implementation note:
     //   The whole cmu dict is very small compared to the available memory on the machine I plan to
@@ -167,10 +198,10 @@ pub fn cmu_dict_file_to_map(file: &Path) -> AHashMap<String, Vec<Pronunciation>>
         // punctuation marks, we would seldom pronounce the punctuation mark as its name.
         .filter(|line| !line.starts_with(";"))   // | "!" | "\"" | "#" | "%" | "&" | ")" | "(" | "+" | "," | "-" | "." | "/" | ":" | "?" | "{" | "}"
         .map(|line| Word::from_cmu_entry(line))
-        .fold(AHashMap::new(), |mut map, word| {
+        .fold(CmuDict::new(), |mut map, word| {
             map.entry(word.word)
                 .or_insert(Vec::new())
-                .push(word.pronunciation);
+                .push(word.clone());
             map
         })
 }
